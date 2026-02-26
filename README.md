@@ -6,16 +6,19 @@ Install skills from this repository with `npx skills add`:
 
 ```bash
 # list available skills
-npx skills@latest add sonofmagic/skills --list
+npx skills add sonofmagic/skills --list
 
 # install one skill
-npx skills@latest add sonofmagic/skills --skill weapp-vite-best-practices -y
+npx skills add sonofmagic/skills --skill weapp-vite-best-practices -y
 
 # install multiple skills
-npx skills@latest add sonofmagic/skills \
+npx skills add sonofmagic/skills \
   --skill wevu-best-practices \
   --skill weapp-vite-best-practices \
   -y
+
+# install all skills in this repository
+npx skills add sonofmagic/skills --all -y
 ```
 
 Available skills currently include:
@@ -25,6 +28,8 @@ Available skills currently include:
 - `weapp-vite-best-practices`
 - `weapp-vite-vue-sfc-best-practices`
 - `wevu-best-practices`
+
+Tip: `npx skills@latest ...` is optional. Prefer `npx skills ...` for regular usage.
 
 ## Packages
 
