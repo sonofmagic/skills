@@ -14,6 +14,15 @@ Contributions Welcome! You can contribute in the following ways.
 
 For more details, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
+## Centralized Upstream Skills Sync
+
+This repository uses a centralized pull-based sync mode to collect skill content from multiple upstream repositories into this target repository.
+
+- Trigger workflow: `.github/workflows/sync-from-upstreams.yml`
+- Source config: `.github/skills-sources.json`
+- Public upstream repositories usually do not require extra tokens.
+- If an upstream repository is private, configure an optional read-only token in this repository as `UPSTREAM_READ_TOKEN`.
+
 ## Rewrite Git History (Dangerous)
 
 Use this only when you intentionally want to discard old git history and keep a single fresh commit on the remote branch.

@@ -1,0 +1,16 @@
+{
+  "sources": [
+    {
+      "repo": "sonofmagic/weapp-tailwindcss",
+      "ref": "main",
+      "source_path": "skills",
+      "target_subdir": "skills/weapp-tailwindcss"
+    },
+    {
+      "repo": "weapp-vite/weapp-vite",
+      "ref": "main",
+      "source_path": "skills",
+      "target_subdir": "skills/weapp-vite"
+    }
+  ]
+}

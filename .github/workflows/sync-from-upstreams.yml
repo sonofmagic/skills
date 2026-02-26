@@ -1,0 +1,140 @@
+name: Sync Skills From Upstreams
+
+on:
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: Preview changes only, do not commit or push
+        required: true
+        default: false
+        type: boolean
+  schedule:
+    - cron: '0 * * * *'
+
+permissions:
+  contents: write
+
+jobs:
+  sync:
+    name: Sync skills from upstream repositories
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout target repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          persist-credentials: true
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Sync configured sources
+        env:
+          UPSTREAM_READ_TOKEN: ${{ secrets.UPSTREAM_READ_TOKEN }}
+        run: |
+          set -euo pipefail
+
+          DRY_RUN="false"
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ] && [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
+            DRY_RUN="true"
+          fi
+          echo "Dry run: ${DRY_RUN}"
+
+          CONFIG_FILE=".github/skills-sources.json"
+          if [ ! -f "${CONFIG_FILE}" ]; then
+            echo "::error::Missing ${CONFIG_FILE}"
+            exit 1
+          fi
+
+          if ! jq -e '.sources and (.sources | type == "array") and (.sources | length > 0)' "${CONFIG_FILE}" >/dev/null; then
+            echo "::error::${CONFIG_FILE} must contain a non-empty sources array"
+            exit 1
+          fi
+
+          STAGING_ROOT="$(mktemp -d)"
+          CLONE_ROOT="$(mktemp -d)"
+          trap 'rm -rf "${STAGING_ROOT}" "${CLONE_ROOT}"' EXIT
+
+          mapfile -t SOURCES < <(jq -c '.sources[]' "${CONFIG_FILE}")
+          mapfile -t TARGET_SUBDIRS < <(jq -r '.sources[].target_subdir' "${CONFIG_FILE}")
+
+          for SOURCE_JSON in "${SOURCES[@]}"; do
+            REPO="$(jq -r '.repo' <<< "${SOURCE_JSON}")"
+            REF="$(jq -r '.ref' <<< "${SOURCE_JSON}")"
+            SOURCE_PATH="$(jq -r '.source_path' <<< "${SOURCE_JSON}")"
+            TARGET_SUBDIR="$(jq -r '.target_subdir' <<< "${SOURCE_JSON}")"
+
+            if [ -z "${REPO}" ] || [ -z "${REF}" ] || [ -z "${SOURCE_PATH}" ] || [ -z "${TARGET_SUBDIR}" ]; then
+              echo "::error::Invalid source entry: ${SOURCE_JSON}"
+              exit 1
+            fi
+
+            LOCAL_CLONE_DIR="${CLONE_ROOT}/$(echo "${REPO}" | tr '/' '_')"
+            REPO_URL="https://github.com/${REPO}.git"
+            if [ -n "${UPSTREAM_READ_TOKEN:-}" ]; then
+              REPO_URL="https://x-access-token:${UPSTREAM_READ_TOKEN}@github.com/${REPO}.git"
+            fi
+
+            echo "Syncing ${REPO}@${REF}:${SOURCE_PATH} -> ${TARGET_SUBDIR}"
+            git clone --depth 1 --filter=blob:none --sparse --branch "${REF}" "${REPO_URL}" "${LOCAL_CLONE_DIR}"
+            git -C "${LOCAL_CLONE_DIR}" sparse-checkout set --cone "${SOURCE_PATH}"
+
+            if [ ! -d "${LOCAL_CLONE_DIR}/${SOURCE_PATH}" ]; then
+              echo "::error::Source path not found: ${REPO}@${REF}:${SOURCE_PATH}"
+              exit 1
+            fi
+
+            TARGET_STAGE_DIR="${STAGING_ROOT}/${TARGET_SUBDIR}"
+            mkdir -p "${TARGET_STAGE_DIR}"
+            rsync -a --delete "${LOCAL_CLONE_DIR}/${SOURCE_PATH}/" "${TARGET_STAGE_DIR}/"
+          done
+
+          mapfile -t UNIQUE_TARGET_SUBDIRS < <(printf '%s\n' "${TARGET_SUBDIRS[@]}" | sort -u)
+          for TARGET_SUBDIR in "${UNIQUE_TARGET_SUBDIRS[@]}"; do
+            mkdir -p "${TARGET_SUBDIR}"
+            rsync -a --delete "${STAGING_ROOT}/${TARGET_SUBDIR}/" "${TARGET_SUBDIR}/"
+          done
+
+          for TARGET_SUBDIR in "${UNIQUE_TARGET_SUBDIRS[@]}"; do
+            if [ ! -d "${TARGET_SUBDIR}" ]; then
+              echo "::error::Target directory missing after sync: ${TARGET_SUBDIR}"
+              exit 1
+            fi
+
+            mapfile -t SKILL_DIRS < <(find "${TARGET_SUBDIR}" -mindepth 1 -maxdepth 1 -type d | sort)
+            if [ "${#SKILL_DIRS[@]}" -eq 0 ]; then
+              echo "::error::No skill directories found in ${TARGET_SUBDIR}"
+              exit 1
+            fi
+
+            for SKILL_DIR in "${SKILL_DIRS[@]}"; do
+              if [ ! -f "${SKILL_DIR}/SKILL.md" ]; then
+                echo "::error::Missing SKILL.md in ${SKILL_DIR}"
+                exit 1
+              fi
+            done
+          done
+
+          if [ -z "$(git status --porcelain)" ]; then
+            echo "No changes detected."
+            exit 0
+          fi
+
+          if [ "${DRY_RUN}" = "true" ]; then
+            echo "Dry run enabled. Planned changes summary:"
+            git status --short
+            git diff --stat
+            exit 0
+          fi
+
+          git add -A
+          if git diff --cached --quiet; then
+            echo "No staged changes."
+            exit 0
+          fi
+
+          git commit -m "chore(sync): update skills from upstream sources"
+          git push
