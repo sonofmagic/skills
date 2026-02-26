@@ -28,6 +28,7 @@ Available skills currently include:
 - `weapp-vite-best-practices`
 - `weapp-vite-vue-sfc-best-practices`
 - `wevu-best-practices`
+- `playwright-cli`
 
 Tip: `npx skills@latest ...` is optional. Prefer `npx skills ...` for regular usage.
 

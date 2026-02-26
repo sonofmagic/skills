@@ -11,6 +11,12 @@
       "ref": "main",
       "source_path": "skills",
       "target_subdir": "skills/weapp-vite"
+    },
+    {
+      "repo": "microsoft/playwright-cli",
+      "ref": "main",
+      "source_path": "skills",
+      "target_subdir": "skills/playwright-cli"
     }
   ]
 }
