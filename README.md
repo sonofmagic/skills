@@ -1,5 +1,31 @@
 # skills
 
+## Quick Install
+
+Install skills from this repository with `npx skills add`:
+
+```bash
+# list available skills
+npx skills@latest add sonofmagic/skills --list
+
+# install one skill
+npx skills@latest add sonofmagic/skills --skill weapp-vite-best-practices -y
+
+# install multiple skills
+npx skills@latest add sonofmagic/skills \
+  --skill wevu-best-practices \
+  --skill weapp-vite-best-practices \
+  -y
+```
+
+Available skills currently include:
+
+- `weapp-tailwindcss`
+- `native-to-weapp-vite-wevu-migration`
+- `weapp-vite-best-practices`
+- `weapp-vite-vue-sfc-best-practices`
+- `wevu-best-practices`
+
 ## Packages
 
 ## Contributing
