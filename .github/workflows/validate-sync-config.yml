@@ -1,0 +1,74 @@
+name: Validate Sync Config
+
+on:
+  pull_request:
+    paths:
+      - .github/skills-sources.json
+      - .github/workflows/sync-from-upstreams.yml
+      - .github/workflows/validate-sync-config.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    name: Validate centralized sync configuration
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Validate sources schema
+        run: |
+          set -euo pipefail
+
+          CONFIG_FILE=".github/skills-sources.json"
+          if [ ! -f "${CONFIG_FILE}" ]; then
+            echo "::error::Missing ${CONFIG_FILE}"
+            exit 1
+          fi
+
+          jq -e '.sources and (.sources | type == "array") and (.sources | length > 0)' "${CONFIG_FILE}" >/dev/null
+
+          jq -e '
+            .sources[]
+            | (.repo | type == "string" and length > 0)
+            and (.ref | type == "string" and length > 0)
+            and (.source_path | type == "string" and length > 0)
+            and (.target_subdir | type == "string" and length > 0)
+          ' "${CONFIG_FILE}" >/dev/null
+
+          if [ "$(jq -r '.sources[].target_subdir' "${CONFIG_FILE}" | sort | uniq -d | wc -l | tr -d ' ')" != "0" ]; then
+            echo "::error::target_subdir values must be unique to avoid source overwrite."
+            exit 1
+          fi
+
+          jq -e '.sources[] | (.target_subdir | startswith("skills/"))' "${CONFIG_FILE}" >/dev/null
+
+      - name: Validate workflow guardrails
+        run: |
+          set -euo pipefail
+
+          WORKFLOW_FILE=".github/workflows/sync-from-upstreams.yml"
+          if [ ! -f "${WORKFLOW_FILE}" ]; then
+            echo "::error::Missing ${WORKFLOW_FILE}"
+            exit 1
+          fi
+
+          REQUIRED_PATTERNS=(
+            "workflow_dispatch"
+            "schedule"
+            "contents: write"
+            "rsync -a --delete"
+            "SKILL.md"
+            "Dry run enabled. Planned changes summary:"
+          )
+
+          for PATTERN in "${REQUIRED_PATTERNS[@]}"; do
+            if ! rg -q --fixed-strings "${PATTERN}" "${WORKFLOW_FILE}"; then
+              echo "::error::Missing required guardrail in sync workflow: ${PATTERN}"
+              exit 1
+            fi
+          done
