@@ -42,7 +42,8 @@
     "script:init": "monorepo init",
     "script:sync": "monorepo sync",
     "script:clean": "monorepo clean",
-    "script:mirror": "monorepo mirror"
+    "script:mirror": "monorepo mirror",
+    "script:rewrite-history": "bash ./scripts/rewrite-git-history.sh"
   },
   "devDependencies": {
     "@changesets/cli": "^2.29.8",

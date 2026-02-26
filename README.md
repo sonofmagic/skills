@@ -14,6 +14,30 @@ Contributions Welcome! You can contribute in the following ways.
 
 For more details, see [CONTRIBUTING.md](CONTRIBUTING.md).
 
+## Rewrite Git History (Dangerous)
+
+Use this only when you intentionally want to discard old git history and keep a single fresh commit on the remote branch.
+
+Local run:
+
+```bash
+pnpm script:rewrite-history -- --target-branch main --yes
+```
+
+Dry run:
+
+```bash
+pnpm script:rewrite-history -- --target-branch main --dry-run
+```
+
+GitHub Actions manual trigger:
+
+1. Open `Actions` -> `Rewrite History`.
+2. Click `Run workflow`.
+3. Fill inputs and run.
+
+After a successful rewrite, all collaborators must re-clone the repository.
+
 ## Contributors
 
 Thanks to [all contributors](https://github.com/sonofmagic/skills/graphs/contributors)!

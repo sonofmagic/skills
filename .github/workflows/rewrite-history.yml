@@ -1,0 +1,81 @@
+name: Rewrite History
+
+on:
+  workflow_dispatch:
+    inputs:
+      remote:
+        description: Git remote name
+        required: true
+        default: origin
+        type: string
+      target_branch:
+        description: Branch to overwrite
+        required: true
+        default: main
+        type: string
+      commit_message:
+        description: New root commit message
+        required: true
+        default: 'chore: reset history'
+        type: string
+      delete_remote_branches:
+        description: Delete all remote branches except target
+        required: true
+        default: true
+        type: boolean
+      delete_remote_tags:
+        description: Delete all remote tags
+        required: true
+        default: true
+        type: boolean
+      dry_run:
+        description: Print planned commands only
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+jobs:
+  rewrite-history:
+    name: Rewrite history and force push
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Run rewrite script
+        run: |
+          chmod +x scripts/rewrite-git-history.sh
+          args=(
+            --yes
+            --remote "${{ inputs.remote }}"
+            --target-branch "${{ inputs.target_branch }}"
+            --commit-message "${{ inputs.commit_message }}"
+          )
+
+          if [ "${{ inputs.delete_remote_branches }}" = "true" ]; then
+            args+=(--delete-remote-branches)
+          else
+            args+=(--keep-remote-branches)
+          fi
+
+          if [ "${{ inputs.delete_remote_tags }}" = "true" ]; then
+            args+=(--delete-remote-tags)
+          else
+            args+=(--keep-remote-tags)
+          fi
+
+          if [ "${{ inputs.dry_run }}" = "true" ]; then
+            args+=(--dry-run)
+          fi
+
+          ./scripts/rewrite-git-history.sh "${args[@]}"
