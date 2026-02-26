@@ -67,7 +67,7 @@ jobs:
           )
 
           for PATTERN in "${REQUIRED_PATTERNS[@]}"; do
-            if ! rg -q --fixed-strings "${PATTERN}" "${WORKFLOW_FILE}"; then
+            if ! grep -Fq "${PATTERN}" "${WORKFLOW_FILE}"; then
               echo "::error::Missing required guardrail in sync workflow: ${PATTERN}"
               exit 1
             fi
