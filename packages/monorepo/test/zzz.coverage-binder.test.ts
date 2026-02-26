@@ -1,0 +1,146 @@
+import { mkdtemp } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import path from 'pathe'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+
+describe('coverage binder', () => {
+  afterEach(() => {
+    vi.unmock('@icebreakers/monorepo-templates')
+  })
+
+  it('executes vitest setup paths', async () => {
+    await vi.resetModules()
+    const pathExistsMock = vi.fn()
+    const prepareAssetsMock = vi.fn(async () => {})
+    const lockCloseMock = vi.fn(async () => {})
+    const openMock = vi.fn(async () => ({ close: lockCloseMock }))
+    const rmMock = vi.fn(async () => {})
+
+    vi.doMock('fs-extra', () => ({
+      __esModule: true,
+      default: { pathExists: pathExistsMock },
+      pathExists: pathExistsMock,
+    }))
+    vi.doMock('node:fs/promises', () => ({
+      open: openMock,
+      rm: rmMock,
+    }))
+    vi.doMock('@icebreakers/monorepo-templates', async (importOriginal) => {
+      const actual = await importOriginal<typeof import('@icebreakers/monorepo-templates')>()
+      return {
+        ...actual,
+        assetsDir: '/assets',
+        prepareAssets: prepareAssetsMock,
+      }
+    })
+
+    pathExistsMock.mockResolvedValueOnce(false)
+    await import('../vitest.setup')
+    expect(prepareAssetsMock).toHaveBeenCalledWith({ silent: true, overwriteExisting: false })
+
+    pathExistsMock.mockResolvedValueOnce(true)
+    await import('../vitest.setup')
+  })
+
+  it('executes getTemplateTargets helper', async () => {
+    await vi.resetModules()
+    const rawMock = vi.fn(async () => 'README.md\npackage.json\n')
+    vi.doMock('simple-git', () => ({
+      simpleGit: vi.fn(() => ({ raw: rawMock })),
+    }))
+
+    const { getTemplateTargets } = await import('./helpers/getTemplateTargets')
+    const targets = await getTemplateTargets()
+    expect(targets).toEqual(expect.arrayContaining(['README.md', 'package.json']))
+  })
+
+  it('executes create command primary flow', async () => {
+    await vi.resetModules()
+    const ensureDirMock = vi.fn(async () => {})
+    const pathExistsMock = vi.fn(async (targetPath: string) => targetPath.endsWith('package.json'))
+    const readJsonMock = vi.fn(async () => ({ name: 'template', version: '1.0.0' }))
+    const outputJsonMock = vi.fn(async () => {})
+    const scaffoldTemplateMock = vi.fn(async () => {})
+
+    vi.doMock('fs-extra', () => ({
+      __esModule: true,
+      default: {
+        ensureDir: ensureDirMock,
+        pathExists: pathExistsMock,
+        readJson: readJsonMock,
+        outputJson: outputJsonMock,
+      },
+      ensureDir: ensureDirMock,
+      pathExists: pathExistsMock,
+      readJson: readJsonMock,
+      outputJson: outputJsonMock,
+    }))
+    vi.doMock('@icebreakers/monorepo-templates', async (importOriginal) => {
+      const actual = await importOriginal<typeof import('@icebreakers/monorepo-templates')>()
+      return {
+        ...actual,
+        scaffoldTemplate: scaffoldTemplateMock,
+      }
+    })
+    vi.doMock('@/core/config', () => ({
+      resolveCommandConfig: vi.fn(async () => ({
+        renameJson: true,
+        name: 'my-app',
+        templatesDir: './templates',
+        templateMap: { custom: 'custom/path' },
+        defaultTemplate: 'custom',
+      })),
+    }))
+    const successMock = vi.fn()
+    vi.doMock('@/core/logger', () => ({
+      logger: {
+        success: successMock,
+      },
+    }))
+
+    const { createNewProject } = await import('@/commands/create')
+    await createNewProject({ cwd: '/repo', type: 'custom' })
+    expect(scaffoldTemplateMock).toHaveBeenCalled()
+    expect(outputJsonMock).toHaveBeenCalledWith(path.join('/repo', 'my-app', 'package.mock.json'), expect.any(Object), { spaces: 2 })
+    expect(successMock).toHaveBeenCalled()
+  })
+
+  it('executes upgrade targets helper', async () => {
+    await vi.resetModules()
+    vi.unmock('@icebreakers/monorepo-templates')
+    const { getAssetTargets } = await import('@icebreakers/monorepo-templates')
+    const targets = getAssetTargets()
+    expect(targets).toContain('.changeset')
+  })
+
+  it('executes core config helpers', async () => {
+    await vi.resetModules()
+    const { loadMonorepoConfig, resolveCommandConfig, defineMonorepoConfig } = await vi.importActual<typeof import('@/core/config')>('@/core/config')
+    defineMonorepoConfig({ commands: { sync: { concurrency: 3 } } })
+    const tempDir = await mkdtemp(path.join(tmpdir(), 'monorepo-config-'))
+    const config = await loadMonorepoConfig(tempDir)
+    expect(config.commands?.clean).toBeUndefined()
+    // second call should hit cache
+    await loadMonorepoConfig(tempDir)
+    expect(await resolveCommandConfig('sync', tempDir)).toEqual({})
+    expect(await resolveCommandConfig('mirror', tempDir)).toEqual({})
+  })
+
+  it('executes utility helpers', async () => {
+    const fsModule = await import('@/utils/fs')
+    expect(fsModule.isIgnorableFsError({ code: 'ENOENT' } as NodeJS.ErrnoException)).toBe(true)
+    expect(fsModule.isIgnorableFsError({ code: 'EPERM' } as NodeJS.ErrnoException)).toBe(false)
+
+    const gitignoreModule = await import('@/utils/gitignore')
+    expect(gitignoreModule.toPublishGitignorePath('.gitignore')).toBe('gitignore')
+    expect(gitignoreModule.toWorkspaceGitignorePath('gitignore')).toBe('.gitignore')
+    expect(gitignoreModule.isGitignoreFile('README.md')).toBe(false)
+
+    const hashModule = await import('@/utils/hash')
+    await hashModule.isFileChanged('a', 'b')
+
+    const regexpModule = await import('@/utils/regexp')
+    expect(regexpModule.escapeStringRegexp('a+b')).toBe('a\\+b')
+    expect(regexpModule.isMatch('packages/a', [/^packages\//])).toBe(true)
+  })
+})
