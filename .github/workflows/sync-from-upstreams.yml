@@ -134,6 +134,45 @@ jobs:
             CHANGES_DETECTED="false"
           fi
 
+          declare -A ADDED_COUNTS MODIFIED_COUNTS DELETED_COUNTS OTHER_COUNTS TOTAL_COUNTS
+          if [ "${CHANGES_DETECTED}" = "true" ]; then
+            while IFS=$'\t' read -r STATUS PATHNAME; do
+              if [ -z "${STATUS}" ] || [ -z "${PATHNAME}" ]; then
+                continue
+              fi
+
+              MATCHED_TARGET=""
+              for TARGET_SUBDIR in "${UNIQUE_TARGET_SUBDIRS[@]}"; do
+                case "${PATHNAME}" in
+                  "${TARGET_SUBDIR}" | "${TARGET_SUBDIR}"/*)
+                    MATCHED_TARGET="${TARGET_SUBDIR}"
+                    break
+                    ;;
+                esac
+              done
+
+              if [ -z "${MATCHED_TARGET}" ]; then
+                continue
+              fi
+
+              TOTAL_COUNTS["${MATCHED_TARGET}"]=$(( ${TOTAL_COUNTS["${MATCHED_TARGET}"]:-0} + 1 ))
+              case "${STATUS}" in
+                A)
+                  ADDED_COUNTS["${MATCHED_TARGET}"]=$(( ${ADDED_COUNTS["${MATCHED_TARGET}"]:-0} + 1 ))
+                  ;;
+                M)
+                  MODIFIED_COUNTS["${MATCHED_TARGET}"]=$(( ${MODIFIED_COUNTS["${MATCHED_TARGET}"]:-0} + 1 ))
+                  ;;
+                D)
+                  DELETED_COUNTS["${MATCHED_TARGET}"]=$(( ${DELETED_COUNTS["${MATCHED_TARGET}"]:-0} + 1 ))
+                  ;;
+                *)
+                  OTHER_COUNTS["${MATCHED_TARGET}"]=$(( ${OTHER_COUNTS["${MATCHED_TARGET}"]:-0} + 1 ))
+                  ;;
+              esac
+            done < <(git diff --name-status --no-renames HEAD --)
+          fi
+
           if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
             {
               echo "## Centralized Skills Sync"
@@ -142,6 +181,17 @@ jobs:
               echo "- Sources configured: \`${#SOURCES[@]}\`"
               echo "- Target roots: \`${#UNIQUE_TARGET_SUBDIRS[@]}\`"
               echo "- Changes detected: \`${CHANGES_DETECTED}\`"
+              echo
+              echo "### Change Summary By Target"
+              if [ "${CHANGES_DETECTED}" = "true" ]; then
+                echo "| Target | Added | Modified | Deleted | Other | Total |"
+                echo "| --- | ---: | ---: | ---: | ---: | ---: |"
+                for TARGET_SUBDIR in "${UNIQUE_TARGET_SUBDIRS[@]}"; do
+                  echo "| \`${TARGET_SUBDIR}\` | ${ADDED_COUNTS["${TARGET_SUBDIR}"]:-0} | ${MODIFIED_COUNTS["${TARGET_SUBDIR}"]:-0} | ${DELETED_COUNTS["${TARGET_SUBDIR}"]:-0} | ${OTHER_COUNTS["${TARGET_SUBDIR}"]:-0} | ${TOTAL_COUNTS["${TARGET_SUBDIR}"]:-0} |"
+                done
+              else
+                echo "No file changes detected."
+              fi
               echo
               echo "### Detected Skill Directories"
               cat "${SUMMARY_TMP}"
