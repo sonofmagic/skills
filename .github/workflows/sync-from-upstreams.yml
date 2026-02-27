@@ -56,7 +56,8 @@ jobs:
 
           STAGING_ROOT="$(mktemp -d)"
           CLONE_ROOT="$(mktemp -d)"
-          trap 'rm -rf "${STAGING_ROOT}" "${CLONE_ROOT}"' EXIT
+          SUMMARY_TMP="$(mktemp)"
+          trap 'rm -rf "${STAGING_ROOT}" "${CLONE_ROOT}" "${SUMMARY_TMP}"' EXIT
 
           mapfile -t SOURCES < <(jq -c '.sources[]' "${CONFIG_FILE}")
           mapfile -t TARGET_SUBDIRS < <(jq -r '.sources[].target_subdir' "${CONFIG_FILE}")
@@ -112,6 +113,13 @@ jobs:
 
             echo "Detected skill directories in ${TARGET_SUBDIR}:"
             printf '  - %s\n' "${SKILL_DIRS[@]}"
+            {
+              echo "#### \`${TARGET_SUBDIR}\`"
+              for SKILL_DIR in "${SKILL_DIRS[@]}"; do
+                echo "- \`${SKILL_DIR}\`"
+              done
+              echo
+            } >> "${SUMMARY_TMP}"
 
             for SKILL_DIR in "${SKILL_DIRS[@]}"; do
               if [ ! -f "${SKILL_DIR}/SKILL.md" ]; then
@@ -120,6 +128,25 @@ jobs:
               fi
             done
           done
+
+          CHANGES_DETECTED="true"
+          if [ -z "$(git status --porcelain)" ]; then
+            CHANGES_DETECTED="false"
+          fi
+
+          if [ -n "${GITHUB_STEP_SUMMARY:-}" ]; then
+            {
+              echo "## Centralized Skills Sync"
+              echo
+              echo "- Dry run: \`${DRY_RUN}\`"
+              echo "- Sources configured: \`${#SOURCES[@]}\`"
+              echo "- Target roots: \`${#UNIQUE_TARGET_SUBDIRS[@]}\`"
+              echo "- Changes detected: \`${CHANGES_DETECTED}\`"
+              echo
+              echo "### Detected Skill Directories"
+              cat "${SUMMARY_TMP}"
+            } >> "${GITHUB_STEP_SUMMARY}"
+          fi
 
           if [ -z "$(git status --porcelain)" ]; then
             echo "No changes detected."
