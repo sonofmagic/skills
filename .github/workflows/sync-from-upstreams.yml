@@ -104,15 +104,17 @@ jobs:
               exit 1
             fi
 
-            mapfile -t SKILL_FILES < <(find "${TARGET_SUBDIR}" -type f -name 'SKILL.md' | sort)
-            if [ "${#SKILL_FILES[@]}" -eq 0 ]; then
+            mapfile -t SKILL_DIRS < <(find "${TARGET_SUBDIR}" -type f -name 'SKILL.md' -exec dirname {} \; | sort -u)
+            if [ "${#SKILL_DIRS[@]}" -eq 0 ]; then
               echo "::error::No SKILL.md files found in ${TARGET_SUBDIR}"
               exit 1
             fi
 
-            for SKILL_FILE in "${SKILL_FILES[@]}"; do
-              SKILL_DIR="$(dirname "${SKILL_FILE}")"
-              if [ ! -f "${SKILL_FILE}" ]; then
+            echo "Detected skill directories in ${TARGET_SUBDIR}:"
+            printf '  - %s\n' "${SKILL_DIRS[@]}"
+
+            for SKILL_DIR in "${SKILL_DIRS[@]}"; do
+              if [ ! -f "${SKILL_DIR}/SKILL.md" ]; then
                 echo "::error::Missing SKILL.md in ${SKILL_DIR}"
                 exit 1
               fi
