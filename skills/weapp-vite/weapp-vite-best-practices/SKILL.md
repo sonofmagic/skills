@@ -54,6 +54,7 @@ description: 面向采用 weapp-vite 项目布局仓库或已安装 `weapp-vite`
    - `weapp.vue.template.slotFallbackWrapperStrategy`：微信平台默认使用内部 `virtualHost` 组件承载转发 `<slot />` 的具名插槽 fallback；需要旧版真实节点行为时显式设为 `view`
    - `weapp.vue.template.slotFallbackWrapper`：普通具名插槽 fallback 的真实 wrapper，可用全局默认、按模板标签名 `component`、子组件静态 `defineOptions({ name })` 的 `componentName`、slot 规则和组件内 `slot-wrapper` / `slot-wrapper-footer` / `slot-wrapper-class` / `slot-wrapper-footer-class` 静态覆盖；显式配置后优先于默认策略；不要把 `block` 当作转发 `<slot />` 的 wrapper
 3. 按目标启用能力：
+   - 项目检查：`wv doctor` 默认只读 JSON/源码；`--build` 与 `--runtime` 显式选择构建/已打开宿主。JSON/SARIF 保留分层覆盖，退出码 2 表示 incomplete，不能当作通过；宿主页面探针不能替代功能 E2E。
    - AI / 调试：`weapp.forwardConsole`、`weapp.mcp`、`wv mcp init|print|doctor`、`wv screenshot`、`wv compare`、`wv ide logs --open`
    - 产物与结构：`subPackages`、`npm`、`chunks`、`worker`、`weapp.analyze.budgets` / `history`
    - 进阶链路：`web`、`lib`
@@ -154,3 +155,11 @@ description: 面向采用 weapp-vite 项目布局仓库或已安装 `weapp-vite`
 - `references/plugin-build-playbook.md`
 - `references/web-runtime-compatibility.md`
 - `references/native-ast-performance-checklist.md`
+
+## 标准 Vite 插件（实验性）
+
+- 配置可导入 `weapp` from `weapp-vite/vite`，以 `plugins: [weapp()]` 激活；继续读取顶层 `weapp`。
+- 当前插件支持单目标微信生产构建与实验性 classic/stateful 开发（`vite dev` / `vp dev`，通过顶层 `weapp.hmr.runtime` 选择），以及原生 `vite build --watch` / `vp build --watch`（生产完整产物，修改宿主配置后需重启命令）；支持微信原生 TS、Wevu Vue 与 React；React 静态 TSX 的 stateful 更新会重建会话，不承诺 hooks 状态保持。已支持独立分包及其宿主监听、子构建配置复用；worker 已进入共享子目标与宿主监听；stateful worker 更新使用完整批次，不承诺线程状态保持。微信插件双产物已接入独立会话与原生 app builder；插件更新不承诺状态保持，双产物暂不支持 `build.write: false`。lib mode 已共用原生声明发布、classic 开发与生产 watch；六平台原生 TS/Vue 支持顶层 `weapp.platform` 单目标选择、classic 与生产 watch；多平台目录式项目配置走原生写出，stateful 仍仅限微信，其他平台真实 IDE 和高级组合单独验收。纯 Web 使用顶层 `weapp.platform: 'web'`，复用同一插件与浏览器宿主；需要既有 Web HTML 入口，不要求小程序项目配置。Web/小程序混合宿主仍待对齐。独立 `wv dev/build` 保留完整能力。
+- 宿主配置是唯一隐式来源；插件不会再次发现 `weapp-vite.config.*`。Vite+ 要按官方 alias 规则统一 `vite` 与 core，不能只看版本号相等。
+- Vitest 配置加载不启动小程序编译。`vp preview`、`vp pack` 不能分别解释为微信预览或小程序组件库构建。
+- 使用前优先读取当前包 `dist/docs/vite-plugin.md` 的支持矩阵，不把后续路线图当成已发布能力。
